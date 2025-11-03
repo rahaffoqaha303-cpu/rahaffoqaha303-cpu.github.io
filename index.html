@@ -1,139 +1,152 @@
-<!DOCTYPE html>
 
+ <!DOCTYPE html>
 <html lang="en">
 
 <head>
   <meta charset="utf-8" />
-  <title>Ramallah Waste Containers - Distance Analysis</title>
-
-  <!-- Leaflet CSS -->
+  <title>Ramallah Waste Containers - Animated Time Map</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.6.0/dist/leaflet.css" />
-
   <style>
-    body { margin: 0; height: 100%; width: 100%; }
-    #map { position: absolute; width: 100%; top: 0; bottom: 0; }
+    body {
+      margin: 0;
+      height: 100%;
+      width: 100%;
+    }
+
+    #map {
+      position: absolute;
+      width: 100%;
+      top: 0;
+      bottom: 40px; /* leave space for slider */
+    }
+
+    #timeSlider {
+      position: absolute;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 300px;
+      z-index: 1000;
+    }
+
+    #dateLabel {
+      position: absolute;
+      bottom: 50px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: white;
+      font-weight: bold;
+      font-size: 16px;
+      z-index: 1000;
+      text-shadow: 0 0 3px black;
+    }
   </style>
 </head>
 
 <body>
-
   <div id="map"></div>
+  <input type="range" id="timeSlider" min="0" max="6" step="1" value="0" />
+  <div id="dateLabel"></div>
 
-  <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.6.0/dist/leaflet.js"></script>
-
-  <!-- jQuery -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
 
-  <!-- Turf.js (لحساب المسافات وأقرب نقطة) -->
-  <script src="https://unpkg.com/@turf/turf/turf.min.js"></script>
-
   <script>
-
-    //------------------
-    // 1) إنشاء الخريطة
-    //------------------
-    const map = L.map("map", {
+    // إعداد الخريطة
+    const mapOptions = {
       zoomSnap: 0.5,
       center: [31.9045, 35.2045],
       zoom: 17.5,
-    });
+    };
 
-    // خلفية الخريطة
+    const map = L.map("map", mapOptions);
+
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
       subdomains: 'abcd',
       maxZoom: 20
     }).addTo(map);
 
-    //------------------
-    // 2) طبقة المناطق
-    //------------------
-    $.getJSON("RamallahZones.json", function(RZ) {
-      L.geoJson(RZ, {
-        style: {
-          fillColor: "yellow",
-          fillOpacity: 0.3,
-          color: "yellow",
-          weight: 1,
-          opacity: 0.7
+    // بيانات توضيحية بسيطة لفاكهة الحاويات مع خاصية "lastEmptied" (تاريخ آخر تفريغ)
+    // القيم في أيام من اليوم 0 (اليوم) إلى 6 أيام قبل.
+    // عادةً البيانات هذه تأتي من ملف JSON خارجي، لكن هنا مثال مباشر:
+    const wasteContainersData = {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": { "id": 1, "lastEmptied": 0 },
+          "geometry": { "type": "Point", "coordinates": [35.2047, 31.9047] }
+        },
+        {
+          "type": "Feature",
+          "properties": { "id": 2, "lastEmptied": 2 },
+          "geometry": { "type": "Point", "coordinates": [35.2049, 31.9043] }
+        },
+        {
+          "type": "Feature",
+          "properties": { "id": 3, "lastEmptied": 5 },
+          "geometry": { "type": "Point", "coordinates": [35.2044, 31.9049] }
+        },
+        {
+          "type": "Feature",
+          "properties": { "id": 4, "lastEmptied": 6 },
+          "geometry": { "type": "Point", "coordinates": [35.2051, 31.9051] }
         }
-      }).addTo(map);
-    });
+      ]
+    };
 
+    // ألوان حسب قدم التفريغ: أخضر= حديث (0-1 يوم)، أصفر= متوسط (2-4 أيام)، أحمر= قديم (5+ أيام)
+    function getColorByLastEmptied(daysAgo) {
+      if (daysAgo <= 1) return "green";
+      else if (daysAgo <= 4) return "yellow";
+      else return "red";
+    }
 
-    //------------------------------------
-    // 3) تحميل طبقة الحاويات أولاً
-    //------------------------------------
-    let containerLayer;
+    let currentDay = 0;
 
-    $.getJSON("wasteContainer.json", function(WC) {
+    // طبقة الحاويات (سيتم تحديثها حسب اختيار التاريخ)
+    let containersLayer;
 
-      containerLayer = L.geoJson(WC, {
-        pointToLayer: function(feature, latlng) {
+    function updateContainersLayer(day) {
+      if (containersLayer) {
+        map.removeLayer(containersLayer);
+      }
+
+      // فلترة الحاويات التي تم تفريغها قبل أو في ذلك اليوم فقط (مثلاً نعرض كل الحاويات التي lastEmptied <= day)
+      const filteredFeatures = wasteContainersData.features.filter(f => f.properties.lastEmptied <= day);
+
+      containersLayer = L.geoJson({ type: "FeatureCollection", features: filteredFeatures }, {
+        pointToLayer: function (feature, latlng) {
           return L.circleMarker(latlng, {
-            radius: 5,
-            fillColor: "orange",
-            color: "orange",
+            radius: 8,
+            fillColor: getColorByLastEmptied(feature.properties.lastEmptied),
+            color: "black",
             weight: 1,
             opacity: 1,
             fillOpacity: 0.9
-          });
+          }).bindPopup(Container ID: ${feature.properties.id}<br>Last emptied: ${feature.properties.lastEmptied} days ago);
         }
       }).addTo(map);
-
-      // بعد تحميل الحاويات → تحميل البيوت
-      loadHouses();
-    });
-
-
-    //------------------------------------
-    // 4) حساب المسافة لكل بيت
-    //------------------------------------
-    function loadHouses() {
-
-      $.getJSON("houses.json", function(HH) {
-
-        L.geoJson(HH, {
-          pointToLayer: function(feature, latlng) {
-            return L.circleMarker(latlng, {
-              radius: 5,
-              fillColor: "cyan",
-              color: "cyan",
-              weight: 1,
-              opacity: 1,
-              fillOpacity: 0.8
-            });
-          },
-
-          onEachFeature: function(feature, layer) {
-            // إيجاد أقرب حاوية للبيت
-            let nearest = turf.nearestPoint(feature, containerLayer.toGeoJSON());
-
-            // حساب المسافة بالمتر
-            let distance = turf.distance(feature, nearest, { units: "meters" });
-
-            // رسم خط بين البيت والحاوية
-            let line = turf.lineString([
-              feature.geometry.coordinates,
-              nearest.geometry.coordinates
-            ]);
-
-            L.geoJson(line, { color: "white", weight: 1, opacity: 0.6 }).addTo(map);
-
-            // Popup
-            layer.bindPopup(المسافة لأقرب حاوية: <b>${distance.toFixed(1)} متر</b>);
-          }
-
-        }).addTo(map);
-
-      });
     }
 
-  </script>
+    // تحديث الخريطة أول مرة مع اليوم 0
+    updateContainersLayer(currentDay);
+    document.getElementById('dateLabel').innerText = عرض حالة الحاويات قبل ${currentDay} أيام;
 
+    // التعامل مع شريط التمرير الزمني
+    const slider = document.getElementById('timeSlider');
+    slider.max = 6;  // أعلى قيمة أيام في البيانات
+
+    slider.addEventListener('input', (e) => {
+      currentDay = parseInt(e.target.value);
+      updateContainersLayer(currentDay);
+      document.getElementById('dateLabel').innerText = عرض حالة الحاويات قبل ${currentDay} أيام;
+    });
+
+  </script>
 </body>
 
-</html>
 
 
 
