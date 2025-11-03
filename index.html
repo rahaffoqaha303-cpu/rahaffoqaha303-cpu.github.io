@@ -1,6 +1,4 @@
-
 <!DOCTYPE html>
-
 <html lang="en">
 
 <head>
@@ -24,7 +22,7 @@
       bottom: 0;
     }
 
-    /* شريط لعرض مستوى الامتلاء */
+    /* صندوق الشرح */
     .legend {
       background: rgba(255, 255, 255, 0.9);
       padding: 10px;
@@ -47,11 +45,65 @@
       height: 15px;
       margin-right: 6px;
     }
+
+    /* أزرار التصفية */
+    .filter-buttons {
+      position: absolute;
+      top: 15px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255, 255, 255, 0.9);
+      padding: 8px 10px;
+      border-radius: 8px;
+      display: flex;
+      gap: 10px;
+      z-index: 1000;
+    }
+
+    .filter-buttons button {
+      padding: 6px 10px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    .filter-buttons button:hover {
+      opacity: 0.8;
+    }
+
+    .green-btn {
+      background-color: green;
+      color: white;
+    }
+
+    .orange-btn {
+      background-color: orange;
+      color: white;
+    }
+
+    .red-btn {
+      background-color: red;
+      color: white;
+    }
+
+    .all-btn {
+      background-color: gray;
+      color: white;
+    }
   </style>
 </head>
 
 <body>
   <div id="map"></div>
+
+  <!-- أزرار التصفية -->
+  <div class="filter-buttons">
+    <button class="all-btn" onclick="filterMarkers('all')">الكل</button>
+    <button class="green-btn" onclick="filterMarkers('green')">فارغة 🟢</button>
+    <button class="orange-btn" onclick="filterMarkers('orange')">متوسطة 🟠</button>
+    <button class="red-btn" onclick="filterMarkers('red')">ممتلئة 🔴</button>
+  </div>
 
   <div class="legend">
     <strong>مستوى امتلاء الحاويات</strong>
@@ -97,11 +149,12 @@
     });
 
     // تحميل الحاويات
+    let allMarkers = []; // نخزن كل الحاويات هنا
+
     $.getJSON("wasteContainer.json", function (WC) {
       L.geoJson(WC, {
         pointToLayer: function (feature, latlng) {
-
-          // توليد نسبة امتلاء عشوائية (كمثال)
+          // توليد نسبة امتلاء عشوائية كمثال
           const fillLevel = Math.floor(Math.random() * 100);
           let color;
           if (fillLevel <= 40) color = "green";
@@ -117,19 +170,32 @@
             fillOpacity: 0.9
           });
 
-          // إضافة نافذة منبثقة تحتوي على التفاصيل
           marker.bindPopup(
             `<b>موقع الحاوية:</b> ${feature.properties.ID || "غير محدد"}<br>
              <b>نسبة الامتلاء:</b> ${fillLevel}%<br>
              <b>آخر تفريغ:</b> ${fillLevel > 80 ? "قبل 3 أيام" : "اليوم"}`
           );
 
+          marker.color = color; // نخزن اللون لسهولة التصفية
+          allMarkers.push(marker);
           return marker;
         }
       }).addTo(map);
     });
+
+    // دالة التصفية
+    function filterMarkers(color) {
+      allMarkers.forEach(m => map.removeLayer(m)); // نحذف الكل
+
+      allMarkers.forEach(m => {
+        if (color === 'all' || m.color === color) {
+          m.addTo(map); // نعرض فقط المختار
+        }
+      });
+    }
   </script>
 </body>
 
 </html>
+
 
