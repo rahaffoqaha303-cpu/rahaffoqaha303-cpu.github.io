@@ -1,5 +1,4 @@
-
- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -17,7 +16,7 @@
       position: absolute;
       width: 100%;
       top: 0;
-      bottom: 40px; /* leave space for slider */
+      bottom: 40px;
     }
 
     #timeSlider {
@@ -67,9 +66,7 @@
       maxZoom: 20
     }).addTo(map);
 
-    // بيانات توضيحية بسيطة لفاكهة الحاويات مع خاصية "lastEmptied" (تاريخ آخر تفريغ)
-    // القيم في أيام من اليوم 0 (اليوم) إلى 6 أيام قبل.
-    // عادةً البيانات هذه تأتي من ملف JSON خارجي، لكن هنا مثال مباشر:
+    // بيانات الحاويات مع خاصية "lastEmptied" (عدد الأيام منذ آخر تفريغ)
     const wasteContainersData = {
       "type": "FeatureCollection",
       "features": [
@@ -96,16 +93,13 @@
       ]
     };
 
-    // ألوان حسب قدم التفريغ: أخضر= حديث (0-1 يوم)، أصفر= متوسط (2-4 أيام)، أحمر= قديم (5+ أيام)
+    // دالة ترجع اللون حسب قدم التفريغ
     function getColorByLastEmptied(daysAgo) {
       if (daysAgo <= 1) return "green";
       else if (daysAgo <= 4) return "yellow";
       else return "red";
     }
 
-    let currentDay = 0;
-
-    // طبقة الحاويات (سيتم تحديثها حسب اختيار التاريخ)
     let containersLayer;
 
     function updateContainersLayer(day) {
@@ -113,7 +107,7 @@
         map.removeLayer(containersLayer);
       }
 
-      // فلترة الحاويات التي تم تفريغها قبل أو في ذلك اليوم فقط (مثلاً نعرض كل الحاويات التي lastEmptied <= day)
+      // فلترة الحاويات التي تم تفريغها قبل أو في ذلك اليوم
       const filteredFeatures = wasteContainersData.features.filter(f => f.properties.lastEmptied <= day);
 
       containersLayer = L.geoJson({ type: "FeatureCollection", features: filteredFeatures }, {
@@ -130,23 +124,26 @@
       }).addTo(map);
     }
 
-    // تحديث الخريطة أول مرة مع اليوم 0
-    updateContainersLayer(currentDay);
-    document.getElementById('dateLabel').innerText = عرض حالة الحاويات قبل ${currentDay} أيام;
-
-    // التعامل مع شريط التمرير الزمني
+    // التهيئة الأولية
     const slider = document.getElementById('timeSlider');
-    slider.max = 6;  // أعلى قيمة أيام في البيانات
+    const dateLabel = document.getElementById('dateLabel');
+
+    function updateUI(day) {
+      updateContainersLayer(day);
+      dateLabel.innerText = عرض حالة الحاويات قبل ${day} أيام;
+    }
+
+    slider.max = 6;
+    slider.value = 0;
 
     slider.addEventListener('input', (e) => {
-      currentDay = parseInt(e.target.value);
-      updateContainersLayer(currentDay);
-      document.getElementById('dateLabel').innerText = عرض حالة الحاويات قبل ${currentDay} أيام;
+      updateUI(parseInt(e.target.value));
     });
+
+    // عرض أولي
+    updateUI(0);
 
   </script>
 </body>
 
-
-
-
+</html>
