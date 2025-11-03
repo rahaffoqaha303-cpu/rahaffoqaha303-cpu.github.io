@@ -23,18 +23,26 @@
     }
 
     /* صندوق الشرح */
-    .legend {
+    .legend, .counter {
       background: rgba(255, 255, 255, 0.9);
       padding: 10px;
       border-radius: 6px;
       line-height: 1.5;
       position: absolute;
-      bottom: 20px;
-      left: 20px;
       font-size: 14px;
     }
 
-    .legend div {
+    .legend {
+      bottom: 20px;
+      left: 20px;
+    }
+
+    .counter {
+      top: 20px;
+      right: 20px;
+    }
+
+    .legend div, .counter div {
       display: flex;
       align-items: center;
       margin-bottom: 4px;
@@ -105,6 +113,14 @@
     <button class="red-btn" onclick="filterMarkers('red')">ممتلئة 🔴</button>
   </div>
 
+  <!-- عداد الحاويات -->
+  <div class="counter">
+    <strong>عداد الحاويات</strong>
+    <div>فارغة 🟢: <span id="green-count">0</span></div>
+    <div>متوسطة 🟠: <span id="orange-count">0</span></div>
+    <div>ممتلئة 🔴: <span id="red-count">0</span></div>
+  </div>
+
   <div class="legend">
     <strong>مستوى امتلاء الحاويات</strong>
     <div><div class="color-box" style="background:green;"></div> منخفض (0-40%)</div>
@@ -151,11 +167,20 @@
     // تحميل الحاويات
     let allMarkers = []; // نخزن كل الحاويات هنا
 
+    function updateCounters() {
+      let greenCount = allMarkers.filter(m => m.color === 'green').length;
+      let orangeCount = allMarkers.filter(m => m.color === 'orange').length;
+      let redCount = allMarkers.filter(m => m.color === 'red').length;
+
+      document.getElementById('green-count').textContent = greenCount;
+      document.getElementById('orange-count').textContent = orangeCount;
+      document.getElementById('red-count').textContent = redCount;
+    }
+
     $.getJSON("wasteContainer.json", function (WC) {
       L.geoJson(WC, {
         pointToLayer: function (feature, latlng) {
-          // توليد نسبة امتلاء عشوائية كمثال
-          const fillLevel = Math.floor(Math.random() * 100);
+          const fillLevel = Math.floor(Math.random() * 100); // مثال عشوائي
           let color;
           if (fillLevel <= 40) color = "green";
           else if (fillLevel <= 70) color = "orange";
@@ -170,14 +195,19 @@
             fillOpacity: 0.9
           });
 
+          // إضافة تنبيه إذا كانت ممتلئة جدًا (>90%)
+          let alertText = fillLevel > 90 ? " ⚠️ حاوية ممتلئة جدًا!" : "";
+
           marker.bindPopup(
             `<b>موقع الحاوية:</b> ${feature.properties.ID || "غير محدد"}<br>
-             <b>نسبة الامتلاء:</b> ${fillLevel}%<br>
+             <b>نسبة الامتلاء:</b> ${fillLevel}%${alertText}<br>
              <b>آخر تفريغ:</b> ${fillLevel > 80 ? "قبل 3 أيام" : "اليوم"}`
           );
 
-          marker.color = color; // نخزن اللون لسهولة التصفية
+          marker.color = color; // لتسهيل التصفية
           allMarkers.push(marker);
+
+          updateCounters(); // تحديث العداد مع كل حاوية
           return marker;
         }
       }).addTo(map);
@@ -185,11 +215,11 @@
 
     // دالة التصفية
     function filterMarkers(color) {
-      allMarkers.forEach(m => map.removeLayer(m)); // نحذف الكل
+      allMarkers.forEach(m => map.removeLayer(m));
 
       allMarkers.forEach(m => {
         if (color === 'all' || m.color === color) {
-          m.addTo(map); // نعرض فقط المختار
+          m.addTo(map);
         }
       });
     }
@@ -197,5 +227,3 @@
 </body>
 
 </html>
-
-
