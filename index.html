@@ -22,8 +22,8 @@
       bottom: 0;
     }
 
-    /* صندوق الشرح */
-    .legend, .counter {
+    .legend,
+    .counter {
       background: rgba(255, 255, 255, 0.9);
       padding: 10px;
       border-radius: 6px;
@@ -42,7 +42,8 @@
       right: 20px;
     }
 
-    .legend div, .counter div {
+    .legend div,
+    .counter div {
       display: flex;
       align-items: center;
       margin-bottom: 4px;
@@ -54,7 +55,6 @@
       margin-right: 6px;
     }
 
-    /* أزرار التصفية */
     .filter-buttons {
       position: absolute;
       top: 15px;
@@ -105,7 +105,6 @@
 <body>
   <div id="map"></div>
 
-  <!-- أزرار التصفية -->
   <div class="filter-buttons">
     <button class="all-btn" onclick="filterMarkers('all')">الكل</button>
     <button class="green-btn" onclick="filterMarkers('green')">فارغة 🟢</button>
@@ -113,7 +112,6 @@
     <button class="red-btn" onclick="filterMarkers('red')">ممتلئة 🔴</button>
   </div>
 
-  <!-- عداد الحاويات -->
   <div class="counter">
     <strong>عداد الحاويات</strong>
     <div>فارغة 🟢: <span id="green-count">0</span></div>
@@ -164,13 +162,13 @@
       }).addTo(map);
     });
 
-    // تحميل الحاويات
-    let allMarkers = []; // نخزن كل الحاويات هنا
+    let allMarkers = []; // لتخزين الحاويات
+    let flashingMarkers = []; // الحاويات الممتلئة جدًا
 
-    function updateCounters() {
-      let greenCount = allMarkers.filter(m => m.color === 'green').length;
-      let orangeCount = allMarkers.filter(m => m.color === 'orange').length;
-      let redCount = allMarkers.filter(m => m.color === 'red').length;
+    function updateCounters(filterColor = 'all') {
+      const greenCount = allMarkers.filter(m => (filterColor === 'all' || m.color === filterColor) && m.color === 'green').length;
+      const orangeCount = allMarkers.filter(m => (filterColor === 'all' || m.color === filterColor) && m.color === 'orange').length;
+      const redCount = allMarkers.filter(m => (filterColor === 'all' || m.color === filterColor) && m.color === 'red').length;
 
       document.getElementById('green-count').textContent = greenCount;
       document.getElementById('orange-count').textContent = orangeCount;
@@ -180,50 +178,62 @@
     $.getJSON("wasteContainer.json", function (WC) {
       L.geoJson(WC, {
         pointToLayer: function (feature, latlng) {
-          const fillLevel = Math.floor(Math.random() * 100); // مثال عشوائي
+          const fillLevel = Math.floor(Math.random() * 100);
           let color;
           if (fillLevel <= 40) color = "green";
           else if (fillLevel <= 70) color = "orange";
           else color = "red";
 
+          let radius = fillLevel > 90 ? 10 : 6;
+          let opacity = fillLevel > 90 ? 1 : 0.9;
+
           const marker = L.circleMarker(latlng, {
-            radius: 6,
+            radius: radius,
             fillColor: color,
             color: color,
             weight: 1,
             opacity: 1,
-            fillOpacity: 0.9
+            fillOpacity: opacity
           });
 
-          // إضافة تنبيه إذا كانت ممتلئة جدًا (>90%)
-          let alertText = fillLevel > 90 ? " ⚠️ حاوية ممتلئة جدًا!" : "";
-
+          const alertText = fillLevel > 90 ? " ⚠️ حاوية ممتلئة جدًا!" : "";
           marker.bindPopup(
             `<b>موقع الحاوية:</b> ${feature.properties.ID || "غير محدد"}<br>
              <b>نسبة الامتلاء:</b> ${fillLevel}%${alertText}<br>
              <b>آخر تفريغ:</b> ${fillLevel > 80 ? "قبل 3 أيام" : "اليوم"}`
           );
 
-          marker.color = color; // لتسهيل التصفية
+          marker.color = color;
           allMarkers.push(marker);
 
-          updateCounters(); // تحديث العداد مع كل حاوية
+          // إذا كانت ممتلئة جدًا، نضيفها للقائمة لتومض
+          if (fillLevel > 90) flashingMarkers.push(marker);
+
+          updateCounters();
           return marker;
         }
       }).addTo(map);
+
+      // تفعيل وميض الحاويات الممتلئة جدًا
+      setInterval(() => {
+        flashingMarkers.forEach(m => {
+          const currentColor = m.options.fillColor;
+          m.setStyle({ fillColor: currentColor === 'red' ? 'darkred' : 'red' });
+        });
+      }, 500); // التغيير كل نصف ثانية
     });
 
-    // دالة التصفية
     function filterMarkers(color) {
       allMarkers.forEach(m => map.removeLayer(m));
-
       allMarkers.forEach(m => {
         if (color === 'all' || m.color === color) {
           m.addTo(map);
         }
       });
+      updateCounters(color);
     }
   </script>
 </body>
 
 </html>
+
