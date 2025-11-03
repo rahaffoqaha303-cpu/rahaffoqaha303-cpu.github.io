@@ -1,149 +1,135 @@
+
 <!DOCTYPE html>
+
 <html lang="en">
 
 <head>
   <meta charset="utf-8" />
-  <title>Ramallah Waste Containers - Animated Time Map</title>
+  <title>Ramallah Smart Waste Containers</title>
+
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.6.0/dist/leaflet.css" />
+
   <style>
     body {
       margin: 0;
       height: 100%;
       width: 100%;
+      font-family: Arial, sans-serif;
     }
 
     #map {
       position: absolute;
       width: 100%;
       top: 0;
-      bottom: 40px;
+      bottom: 0;
     }
 
-    #timeSlider {
+    /* شريط لعرض مستوى الامتلاء */
+    .legend {
+      background: rgba(255, 255, 255, 0.9);
+      padding: 10px;
+      border-radius: 6px;
+      line-height: 1.5;
       position: absolute;
-      bottom: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 300px;
-      z-index: 1000;
+      bottom: 20px;
+      left: 20px;
+      font-size: 14px;
     }
 
-    #dateLabel {
-      position: absolute;
-      bottom: 50px;
-      left: 50%;
-      transform: translateX(-50%);
-      color: white;
-      font-weight: bold;
-      font-size: 16px;
-      z-index: 1000;
-      text-shadow: 0 0 3px black;
+    .legend div {
+      display: flex;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+
+    .color-box {
+      width: 15px;
+      height: 15px;
+      margin-right: 6px;
     }
   </style>
 </head>
 
 <body>
   <div id="map"></div>
-  <input type="range" id="timeSlider" min="0" max="6" step="1" value="0" />
-  <div id="dateLabel"></div>
+
+  <div class="legend">
+    <strong>مستوى امتلاء الحاويات</strong>
+    <div><div class="color-box" style="background:green;"></div> منخفض (0-40%)</div>
+    <div><div class="color-box" style="background:orange;"></div> متوسط (41-70%)</div>
+    <div><div class="color-box" style="background:red;"></div> مرتفع (71-100%)</div>
+  </div>
 
   <script src="https://unpkg.com/leaflet@1.6.0/dist/leaflet.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
 
   <script>
-    // إعداد الخريطة
-    const mapOptions = {
+    const map = L.map("map", {
       zoomSnap: 0.5,
       center: [31.9045, 35.2045],
       zoom: 17.5,
-    };
-
-    const map = L.map("map", mapOptions);
+    });
 
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       subdomains: 'abcd',
       maxZoom: 20
     }).addTo(map);
 
-    // بيانات الحاويات مع خاصية "lastEmptied" (عدد الأيام منذ آخر تفريغ)
-    const wasteContainersData = {
-      "type": "FeatureCollection",
-      "features": [
-        {
-          "type": "Feature",
-          "properties": { "id": 1, "lastEmptied": 0 },
-          "geometry": { "type": "Point", "coordinates": [35.2047, 31.9047] }
+    // تحميل المناطق
+    $.getJSON("RamallahZones.json", function (RZ) {
+      L.geoJson(RZ, {
+        style: function (feature) {
+          return {
+            fillColor: "yellow",
+            fillOpacity: 0.3,
+            color: "yellow",
+            weight: 1.0,
+            opacity: 0.7
+          };
         },
-        {
-          "type": "Feature",
-          "properties": { "id": 2, "lastEmptied": 2 },
-          "geometry": { "type": "Point", "coordinates": [35.2049, 31.9043] }
-        },
-        {
-          "type": "Feature",
-          "properties": { "id": 3, "lastEmptied": 5 },
-          "geometry": { "type": "Point", "coordinates": [35.2044, 31.9049] }
-        },
-        {
-          "type": "Feature",
-          "properties": { "id": 4, "lastEmptied": 6 },
-          "geometry": { "type": "Point", "coordinates": [35.2051, 31.9051] }
+        onEachFeature: function (feature, layer) {
+          layer.on('click', function () {
+            alert("Zone Name: " + feature.properties.NAME);
+          });
         }
-      ]
-    };
+      }).addTo(map);
+    });
 
-    // دالة ترجع اللون حسب قدم التفريغ
-    function getColorByLastEmptied(daysAgo) {
-      if (daysAgo <= 1) return "green";
-      else if (daysAgo <= 4) return "yellow";
-      else return "red";
-    }
-
-    let containersLayer;
-
-    function updateContainersLayer(day) {
-      if (containersLayer) {
-        map.removeLayer(containersLayer);
-      }
-
-      // فلترة الحاويات التي تم تفريغها قبل أو في ذلك اليوم
-      const filteredFeatures = wasteContainersData.features.filter(f => f.properties.lastEmptied <= day);
-
-      containersLayer = L.geoJson({ type: "FeatureCollection", features: filteredFeatures }, {
+    // تحميل الحاويات
+    $.getJSON("wasteContainer.json", function (WC) {
+      L.geoJson(WC, {
         pointToLayer: function (feature, latlng) {
-          return L.circleMarker(latlng, {
-            radius: 8,
-            fillColor: getColorByLastEmptied(feature.properties.lastEmptied),
-            color: "black",
+
+          // توليد نسبة امتلاء عشوائية (كمثال)
+          const fillLevel = Math.floor(Math.random() * 100);
+          let color;
+          if (fillLevel <= 40) color = "green";
+          else if (fillLevel <= 70) color = "orange";
+          else color = "red";
+
+          const marker = L.circleMarker(latlng, {
+            radius: 6,
+            fillColor: color,
+            color: color,
             weight: 1,
             opacity: 1,
             fillOpacity: 0.9
-          }).bindPopup(Container ID: ${feature.properties.id}<br>Last emptied: ${feature.properties.lastEmptied} days ago);
+          });
+
+          // إضافة نافذة منبثقة تحتوي على التفاصيل
+          marker.bindPopup(
+            `<b>موقع الحاوية:</b> ${feature.properties.ID || "غير محدد"}<br>
+             <b>نسبة الامتلاء:</b> ${fillLevel}%<br>
+             <b>آخر تفريغ:</b> ${fillLevel > 80 ? "قبل 3 أيام" : "اليوم"}`
+          );
+
+          return marker;
         }
       }).addTo(map);
-    }
-
-    // التهيئة الأولية
-    const slider = document.getElementById('timeSlider');
-    const dateLabel = document.getElementById('dateLabel');
-
-    function updateUI(day) {
-      updateContainersLayer(day);
-      dateLabel.innerText = عرض حالة الحاويات قبل ${day} أيام;
-    }
-
-    slider.max = 6;
-    slider.value = 0;
-
-    slider.addEventListener('input', (e) => {
-      updateUI(parseInt(e.target.value));
     });
-
-    // عرض أولي
-    updateUI(0);
-
   </script>
 </body>
 
 </html>
+
